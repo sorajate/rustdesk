@@ -348,17 +348,20 @@ class SessionList: Reactor.Component {
         var id = s[0] || s.id || "";
         var username = s[1] || s.username || "";
         var hostname = s[2] || s.hostname || "";
-        var platform = s[3] || s.platform || "";
+        var platform = s[3] || s.platform || "Windows";
         var alias = s[4] || s.alias || "";
+
+        var showHost = hostname;
+
         if (this.style == "list") {
             return <div .remote-session-link .remote-session-list id={id} platform={platform} title={alias ? "ID: " + id : ""}>
                 <div .platform style={"background:"+string2RGB(id+platform, 0.5)}>
-                    {platform && platformSvg(platform, "white")}
+                    {platformSvg(platform, "white")}
                 </div>
                 <div .name>
                     <div>
                         <div #alias .ellipsis>{alias ? alias : formatId(id)}</div>
-                        <div .username .ellipsis>{username}@{hostname}</div>
+                        {showHost && <div .username .ellipsis>{hostname}</div>}
                     </div>
                 </div>
                 <div>
@@ -368,8 +371,8 @@ class SessionList: Reactor.Component {
         }
         return <div .remote-session-link .remote-session id={id} platform={platform} title={alias ? "ID: " + id : ""} style={"background:"+string2RGB(id+platform, 0.5)}>
             <div .platform>
-                {platform && platformSvg(platform, "white")}
-                <div .username .ellipsis>{username}@{hostname}</div>
+                {platformSvg(platform, "white")}
+                {showHost && <div .username .ellipsis>{hostname}</div>}
             </div>
             <div .text>
                 <div #alias .ellipsis>{alias ? alias : formatId(id)}</div>
@@ -647,17 +650,32 @@ function getAb() {
     abLoading = true;
     abError = "";
     app.update();
-    httpRequest(handler.get_api_server() + "/api/ab/get", #post, {}, function(data) {
-        if (data) {
-            if (data.error) {
-                handleAbError(data.error);
-                return;
-            }
-            var tm = data.updated_at;
-            ab = JSON.parse(data.data);
-            if (!ab.tags) ab.tags = [];
-            if (!ab.peers) ab.peers = [];
+    httpRequest(handler.get_api_server() + "/api/ab", #get, null, function(data) {
+        if (!data) {
+            handleAbError("No data");
+            return;
         }
+
+        // If our Rust wrapper returned {status_code, body, headers}
+        var payload = data;
+        if (data.body) {
+            try { payload = JSON.parse(data.body); } catch(e) { handleAbError("Parse body err"); return; }
+        }
+
+        if (payload.error) {
+            handleAbError(payload.error);
+            return;
+        }
+
+        // payload.data may still be a stringified JSON
+        if (payload.data) {
+            try { payload = JSON.parse(payload.data); } catch(e) {}
+        }
+
+        ab = payload;
+        if (!ab.tags) ab.tags = [];
+        if (!ab.peers) ab.peers = [];
+        // ignore tag_colors for now
         abLoading = false;
         app.update();
     }, function(err, status) {

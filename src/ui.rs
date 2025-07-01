@@ -578,8 +578,8 @@ impl UI {
         get_async_job_status()
     }
 
-    fn get_http_status(&self, url: String) -> Option<String> {
-        get_async_http_status(url)
+    fn get_http_status(&self, url: String) -> String {
+        get_async_http_status(url).unwrap_or(" ".to_owned())
     }
 
     fn t(&self, name: String) -> String {
@@ -650,6 +650,30 @@ impl UI {
 
     pub fn check_hwcodec(&self) {
         check_hwcodec()
+    }
+
+    // Add new helper to perform a synchronous HTTP call and return result string
+    fn rs_call(&self, url: String, method: String, body: String, header: String) -> String {
+        let body_opt = if body.is_empty() { None } else { Some(body) };
+        match crate::common::http_request_sync(url, method, body_opt, header) {
+            Ok(s) => s,
+            Err(e) => format!("{{\"error\":\"{}\"}}", e),
+        }
+    }
+
+    // Add new helper to perform async GET requests for Address Book
+    fn ab_fetch(&self, url: String, header: String) {
+        // Accept either "Key: Value" or JSON-string header; convert to JSON object string required by http_request.
+        let header_json = if header.trim_start().starts_with('{') {
+            header
+        } else if let Some(idx) = header.find(':') {
+            let (k, v) = header.split_at(idx);
+            let v = v.trim_start_matches(':').trim();
+            format!("{{\"{}\":\"{}\"}}", k.trim(), v)
+        } else {
+            header
+        };
+        crate::ui_interface::http_request(url, "get".into(), None, header_json);
     }
 }
 
@@ -725,6 +749,7 @@ impl sciter::EventHandler for UI {
         fn open_url(String);
         fn change_id(String);
         fn get_async_job_status();
+        fn get_http_status(String);
         fn post_request(String, String, String);
         fn is_ok_change_id();
         fn create_shortcut(String);
@@ -744,6 +769,8 @@ impl sciter::EventHandler for UI {
         fn verify2fa(String);
         fn check_hwcodec();
         fn verify_login(String, String);
+        fn rs_call(String, String, String, String);
+        fn ab_fetch(String, String);
     }
 }
 
